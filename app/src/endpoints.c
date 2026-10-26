@@ -15,6 +15,9 @@
 #include <dt-bindings/zmk/hid_usage_pages.h>
 #include <zmk/usb_hid.h>
 #include <zmk/hog.h>
+#if IS_ENABLED(CONFIG_ZMK_ESB_HID)
+#include <zmk/esb_hid.h>
+#endif /* IS_ENABLED(CONFIG_ZMK_ESB_HID) */
 #include <zmk/endpoints.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/ble_active_profile_changed.h>
@@ -40,6 +43,8 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if IS_ENABLED(CONFIG_ZMK_USB)
 #define DEFAULT_TRANSPORT ZMK_TRANSPORT_USB
+#elif IS_ENABLED(CONFIG_ZMK_ESB_HID)
+#define DEFAULT_TRANSPORT ZMK_TRANSPORT_ESB
 #elif IS_ENABLED(CONFIG_ZMK_BLE)
 #define DEFAULT_TRANSPORT ZMK_TRANSPORT_BLE
 #else
@@ -82,6 +87,9 @@ bool zmk_endpoint_instance_eq(struct zmk_endpoint_instance a, struct zmk_endpoin
 
     case ZMK_TRANSPORT_BLE:
         return a.ble.profile_index == b.ble.profile_index;
+
+    case ZMK_TRANSPORT_ESB:
+        return a.esb.device_index == b.esb.device_index;
     }
 
     LOG_ERR("Invalid transport %d", a.transport);
@@ -99,6 +107,9 @@ int zmk_endpoint_instance_to_str(struct zmk_endpoint_instance endpoint, char *st
     case ZMK_TRANSPORT_BLE:
         return snprintf(str, len, "BLE:%d", endpoint.ble.profile_index);
 
+    case ZMK_TRANSPORT_ESB:
+        return snprintf(str, len, "ESB:%d", endpoint.esb.device_index);
+
     default:
         return snprintf(str, len, "Invalid");
     }
@@ -107,6 +118,7 @@ int zmk_endpoint_instance_to_str(struct zmk_endpoint_instance endpoint, char *st
 #define INSTANCE_INDEX_OFFSET_NONE 0
 #define INSTANCE_INDEX_OFFSET_USB (INSTANCE_INDEX_OFFSET_NONE + ZMK_ENDPOINT_NONE_COUNT)
 #define INSTANCE_INDEX_OFFSET_BLE (INSTANCE_INDEX_OFFSET_USB + ZMK_ENDPOINT_USB_COUNT)
+#define INSTANCE_INDEX_OFFSET_ESB (INSTANCE_INDEX_OFFSET_BLE + ZMK_ENDPOINT_BLE_COUNT)
 
 int zmk_endpoint_instance_to_index(struct zmk_endpoint_instance endpoint) {
     switch (endpoint.transport) {
@@ -118,6 +130,9 @@ int zmk_endpoint_instance_to_index(struct zmk_endpoint_instance endpoint) {
 
     case ZMK_TRANSPORT_BLE:
         return INSTANCE_INDEX_OFFSET_BLE + endpoint.ble.profile_index;
+
+    case ZMK_TRANSPORT_ESB:
+        return INSTANCE_INDEX_OFFSET_ESB + endpoint.esb.device_index;
     }
 
     LOG_ERR("Invalid transport %d", endpoint.transport);
@@ -151,6 +166,10 @@ int zmk_endpoint_toggle_preferred_transport(void) {
 static struct zmk_endpoint_instance get_instance_from_transport(enum zmk_transport transport) {
     struct zmk_endpoint_instance instance = {.transport = transport};
     switch (instance.transport) {
+    case ZMK_TRANSPORT_ESB:
+        instance.esb.device_index = 0;
+        break;
+
     case ZMK_TRANSPORT_BLE:
 #if IS_ENABLED(CONFIG_ZMK_BLE)
         instance.ble.profile_index = zmk_ble_active_profile_index();
@@ -204,6 +223,20 @@ static int send_keyboard_report(void) {
         return -ENOTSUP;
 #endif /* IS_ENABLED(CONFIG_ZMK_BLE) */
     }
+
+    case ZMK_TRANSPORT_ESB: {
+#if IS_ENABLED(CONFIG_ZMK_ESB_HID)
+        struct zmk_hid_keyboard_report *keyboard_report = zmk_hid_get_keyboard_report();
+        int err = zmk_esb_hid_send_keyboard_report(&keyboard_report->body);
+        if (err) {
+            LOG_ERR("FAILED TO SEND OVER ESB: %d", err);
+        }
+        return err;
+#else
+        LOG_ERR("ESB HID endpoint is not supported");
+        return -ENOTSUP;
+#endif /* IS_ENABLED(CONFIG_ZMK_ESB_HID) */
+    }
     }
 
     LOG_ERR("Unhandled endpoint transport %d", current_instance.transport);
@@ -240,6 +273,20 @@ static int send_consumer_report(void) {
         LOG_ERR("BLE HOG endpoint is not supported");
         return -ENOTSUP;
 #endif /* IS_ENABLED(CONFIG_ZMK_BLE) */
+    }
+
+    case ZMK_TRANSPORT_ESB: {
+#if IS_ENABLED(CONFIG_ZMK_ESB_HID)
+        struct zmk_hid_consumer_report *consumer_report = zmk_hid_get_consumer_report();
+        int err = zmk_esb_hid_send_consumer_report(&consumer_report->body);
+        if (err) {
+            LOG_ERR("FAILED TO SEND OVER ESB: %d", err);
+        }
+        return err;
+#else
+        LOG_ERR("ESB HID endpoint is not supported");
+        return -ENOTSUP;
+#endif /* IS_ENABLED(CONFIG_ZMK_ESB_HID) */
     }
     }
 
@@ -292,6 +339,20 @@ int zmk_endpoint_send_mouse_report() {
         LOG_ERR("BLE HOG endpoint is not supported");
         return -ENOTSUP;
 #endif /* IS_ENABLED(CONFIG_ZMK_BLE) */
+    }
+
+    case ZMK_TRANSPORT_ESB: {
+#if IS_ENABLED(CONFIG_ZMK_ESB_HID)
+        struct zmk_hid_mouse_report *mouse_report = zmk_hid_get_mouse_report();
+        int err = zmk_esb_hid_send_mouse_report(&mouse_report->body);
+        if (err) {
+            LOG_ERR("FAILED TO SEND OVER ESB: %d", err);
+        }
+        return err;
+#else
+        LOG_ERR("ESB HID endpoint is not supported");
+        return -ENOTSUP;
+#endif /* IS_ENABLED(CONFIG_ZMK_ESB_HID) */
     }
     }
 
@@ -421,6 +482,14 @@ static bool is_ble_ready(void) {
 #endif
 }
 
+static bool is_esb_ready(void) {
+#if IS_ENABLED(CONFIG_ZMK_ESB_HID)
+    return zmk_esb_hid_is_ready();
+#else
+    return false;
+#endif
+}
+
 static enum zmk_transport get_selected_transport(void) {
     switch (preferred_transport) {
     case ZMK_TRANSPORT_NONE:
@@ -436,6 +505,10 @@ static enum zmk_transport get_selected_transport(void) {
             LOG_DBG("USB is not ready. Falling back to BLE");
             return ZMK_TRANSPORT_BLE;
         }
+        if (is_esb_ready()) {
+            LOG_DBG("USB is not ready. Falling back to ESB");
+            return ZMK_TRANSPORT_ESB;
+        }
         break;
 
     case ZMK_TRANSPORT_BLE:
@@ -446,6 +519,25 @@ static enum zmk_transport get_selected_transport(void) {
         if (is_usb_ready()) {
             LOG_DBG("BLE is not ready. Falling back to USB");
             return ZMK_TRANSPORT_USB;
+        }
+        if (is_esb_ready()) {
+            LOG_DBG("BLE is not ready. Falling back to ESB");
+            return ZMK_TRANSPORT_ESB;
+        }
+        break;
+
+    case ZMK_TRANSPORT_ESB:
+        if (is_esb_ready()) {
+            LOG_DBG("ESB is preferred and ready");
+            return ZMK_TRANSPORT_ESB;
+        }
+        if (is_usb_ready()) {
+            LOG_DBG("ESB is not ready. Falling back to USB");
+            return ZMK_TRANSPORT_USB;
+        }
+        if (is_ble_ready()) {
+            LOG_DBG("ESB is not ready. Falling back to BLE");
+            return ZMK_TRANSPORT_BLE;
         }
         break;
     }

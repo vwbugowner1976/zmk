@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/init.h>
 
@@ -209,6 +210,23 @@ int zmk_usb_hid_send_keyboard_report(void) {
     size_t len;
     uint8_t *report = get_keyboard_report(&len);
     return zmk_usb_hid_send_report(report, len);
+}
+
+static uint8_t raw_report_buf[64];
+static K_MUTEX_DEFINE(raw_report_lock);
+
+int zmk_usb_hid_send_report_with_id(uint8_t report_id, const uint8_t *body, size_t len) {
+    if (len + 1 > sizeof(raw_report_buf)) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&raw_report_lock, K_FOREVER);
+    raw_report_buf[0] = report_id;
+    memcpy(raw_report_buf + 1, body, len);
+    int err = zmk_usb_hid_send_report(raw_report_buf, len + 1);
+    k_mutex_unlock(&raw_report_lock);
+
+    return err;
 }
 
 int zmk_usb_hid_send_consumer_report(void) {

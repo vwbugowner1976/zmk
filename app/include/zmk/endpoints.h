@@ -28,6 +28,12 @@
 #define ZMK_ENDPOINT_BLE_COUNT 0
 #endif
 
+#ifdef CONFIG_ZMK_ESB_HID
+#define ZMK_ENDPOINT_ESB_COUNT 1
+#else
+#define ZMK_ENDPOINT_ESB_COUNT 0
+#endif
+
 /**
  * The total number of different (struct zmk_endpoint_instance) values that can
  * be selected.
@@ -36,7 +42,7 @@
  * be used in any persistent storage.
  */
 #define ZMK_ENDPOINT_COUNT                                                                         \
-    (ZMK_ENDPOINT_NONE_COUNT + ZMK_ENDPOINT_USB_COUNT + ZMK_ENDPOINT_BLE_COUNT)
+    (ZMK_ENDPOINT_NONE_COUNT + ZMK_ENDPOINT_USB_COUNT + ZMK_ENDPOINT_BLE_COUNT + ZMK_ENDPOINT_ESB_COUNT)
 
 bool zmk_endpoint_instance_eq(struct zmk_endpoint_instance a, struct zmk_endpoint_instance b);
 
