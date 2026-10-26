@@ -94,6 +94,15 @@ struct zmk_endpoint_instance zmk_endpoint_get_preferred(void);
 struct zmk_endpoint_instance zmk_endpoint_get_selected(void);
 
 /**
+ * Re-evaluate which endpoint instance is currently selected.
+ *
+ * Normally driven by USB/BLE state-change events. Transports whose
+ * readiness changes asynchronously (e.g. the ESB HID module, whose
+ * link comes up after boot) call this when their readiness changes.
+ */
+void zmk_endpoint_update_current(void);
+
+/**
  * Returns whether the keyboard is connected to an endpoint.
  *
  * This is equivalent to zmk_endpoint_get_selected().transport != ZMK_TRANSPORT_NONE

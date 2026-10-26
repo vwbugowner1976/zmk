@@ -571,6 +571,8 @@ void zmk_endpoint_clear_reports(void) {
     zmk_endpoint_send_report(HID_USAGE_CONSUMER);
 }
 
+void zmk_endpoint_update_current(void) { update_current_endpoint(); }
+
 static void update_current_endpoint(void) {
     struct zmk_endpoint_instance new_instance = get_selected_instance();
 
