@@ -76,7 +76,8 @@ int zmk_endpoint_set_preferred_transport(enum zmk_transport transport);
 enum zmk_transport zmk_endpoint_get_preferred_transport(void);
 
 /**
- * If the preferred endpoint transport is USB, sets it to BLE, else sets it to USB.
+ * Advances the preferred endpoint transport to the next transport
+ * compiled into this build, cycling in USB -> BLE -> ESB order.
  */
 int zmk_endpoint_toggle_preferred_transport(void);
 

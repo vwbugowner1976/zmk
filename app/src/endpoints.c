@@ -158,9 +158,35 @@ int zmk_endpoint_set_preferred_transport(enum zmk_transport transport) {
 enum zmk_transport zmk_endpoint_get_preferred_transport(void) { return preferred_transport; }
 
 int zmk_endpoint_toggle_preferred_transport(void) {
-    enum zmk_transport new_transport =
-        (preferred_transport == ZMK_TRANSPORT_USB) ? ZMK_TRANSPORT_BLE : ZMK_TRANSPORT_USB;
-    return zmk_endpoint_set_preferred_transport(new_transport);
+    /* Cycle through the transports compiled into this build, in
+     * USB -> BLE -> ESB order. Builds without ESB keep the historical
+     * USB <-> BLE behavior, since only those two can appear below. */
+    static const enum zmk_transport cycle[] = {
+#if IS_ENABLED(CONFIG_ZMK_USB)
+        ZMK_TRANSPORT_USB,
+#endif
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+        ZMK_TRANSPORT_BLE,
+#endif
+#if IS_ENABLED(CONFIG_ZMK_ESB_HID)
+        ZMK_TRANSPORT_ESB,
+#endif
+    };
+
+    if (ARRAY_SIZE(cycle) == 0) {
+        return -ENOTSUP;
+    }
+
+    for (size_t i = 0; i < ARRAY_SIZE(cycle); i++) {
+        if (cycle[i] == preferred_transport) {
+            return zmk_endpoint_set_preferred_transport(cycle[(i + 1) % ARRAY_SIZE(cycle)]);
+        }
+    }
+
+    /* The preferred transport is not in the cycle (e.g. NONE, or a
+     * transport that is not compiled in): jump to the first available
+     * transport. */
+    return zmk_endpoint_set_preferred_transport(cycle[0]);
 }
 
 static struct zmk_endpoint_instance get_instance_from_transport(enum zmk_transport transport) {
